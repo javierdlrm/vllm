@@ -1,0 +1,10 @@
+# syntax=docker/dockerfile:experimental
+ARG VLLM_VERSION=v0.6.4
+FROM vllm/vllm-openai:${VLLM_VERSION}
+
+#################### HOPSWORKS ####################
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install 'hopsworks[python]==4.1.0rc0'
+#################### HOPSWORKS ####################
+
+# TODO: add modified vllm.entrypoints.openai files!

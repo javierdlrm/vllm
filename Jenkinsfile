@@ -10,7 +10,7 @@ properties([
 
 node("local") {
     stage('Clone repository') {
-      if (params.branch == '' || params.branch == 'master'){
+      if (params.branch == ''){
         checkout scm
       } else {
         sshagent (credentials: ['id_rsa']) {

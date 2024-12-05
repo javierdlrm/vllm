@@ -66,6 +66,8 @@ if envs.VLLM_USE_V1:
 else:
     from vllm.engine.async_llm_engine import AsyncLLMEngine  # type: ignore
 
+import hopsworks_utils
+
 TIMEOUT_KEEP_ALIVE = 5  # seconds
 
 prometheus_multiproc_dir: tempfile.TemporaryDirectory
@@ -344,7 +346,14 @@ async def create_chat_completion(request: ChatCompletionRequest,
         return base(raw_request).create_error_response(
             message="The model does not support Chat Completions API")
 
-    generator = await handler.create_chat_completion(request, raw_request)
+    ############
+    # Hopsworks: use create_chat_completion from predictor script if provided
+    ############
+    component = hopsworks_utils.utils.get_component_from_state(raw_request)
+    if component and component._has_create_chat_completion:
+        generator = await component.create_chat_completion(request)
+    else:
+        generator = await handler.create_chat_completion(request, raw_request)
 
     if isinstance(generator, ErrorResponse):
         return JSONResponse(content=generator.model_dump(),
@@ -363,7 +372,14 @@ async def create_completion(request: CompletionRequest, raw_request: Request):
         return base(raw_request).create_error_response(
             message="The model does not support Completions API")
 
-    generator = await handler.create_completion(request, raw_request)
+    ############
+    # Hopsworks: use create_completion from predictor script if provided
+    ############
+    component = hopsworks_utils.utils.get_component_from_state(raw_request)
+    if component and component._has_create_completion:
+        generator = await component.create_completion(request, raw_request)
+    else:
+        generator = await handler.create_completion(request, raw_request)
     if isinstance(generator, ErrorResponse):
         return JSONResponse(content=generator.model_dump(),
                             status_code=generator.code)
@@ -510,6 +526,7 @@ def init_app_state(
     model_config: ModelConfig,
     state: State,
     args: Namespace,
+    component=None,
 ) -> None:
     if args.served_model_name is not None:
         served_model_names = args.served_model_name
@@ -568,6 +585,11 @@ def init_app_state(
         chat_template=args.chat_template,
     )
 
+    ############
+    # Hopsworks: add component to the app state
+    ############
+    state.component = component
+
 
 def create_server_socket(addr: Tuple[str, int]) -> socket.socket:
     family = socket.AF_INET
@@ -581,9 +603,10 @@ def create_server_socket(addr: Tuple[str, int]) -> socket.socket:
     return sock
 
 
-async def run_server(args, **uvicorn_kwargs) -> None:
+async def run_server(args, component, **uvicorn_kwargs) -> None:
     logger.info("vLLM API server version %s", VLLM_VERSION)
     logger.info("args: %s", args)
+    logger.info("component: %s", component if component else "n/d")
 
     if args.tool_parser_plugin and len(args.tool_parser_plugin) > 3:
         ToolParserManager.import_tool_parser(args.tool_parser_plugin)
@@ -610,7 +633,7 @@ async def run_server(args, **uvicorn_kwargs) -> None:
         app = build_app(args)
 
         model_config = await engine_client.get_model_config()
-        init_app_state(engine_client, model_config, app.state, args)
+        init_app_state(engine_client, model_config, app.state, args, component)
 
         shutdown_task = await serve_http(
             app,
@@ -640,4 +663,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     validate_parsed_serve_args(args)
 
-    uvloop.run(run_server(args))
+    ############
+    # Hopsworks: load predictor script if provided
+    ############
+    component = hopsworks_utils.utils.load_component_module(args)
+
+    uvloop.run(run_server(args, component))

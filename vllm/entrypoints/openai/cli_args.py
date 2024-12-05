@@ -16,6 +16,8 @@ from vllm.entrypoints.openai.serving_engine import (LoRAModulePath,
 from vllm.entrypoints.openai.tool_parsers import ToolParserManager
 from vllm.utils import FlexibleArgumentParser
 
+import hopsworks_utils
+
 
 class LoRAParserAction(argparse.Action):
 
@@ -234,6 +236,11 @@ def make_arg_parser(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
         default=False,
         help="If set to True, enable prompt_tokens_details in usage.")
 
+    ############
+    # Hopsworks: arguments: these following arguments are set by the Hopsworks backend
+    ############
+    hopsworks_utils.utils.add_cli_args(parser)
+
     return parser
 
 
@@ -249,6 +256,11 @@ def validate_parsed_serve_args(args: argparse.Namespace):
     if args.enable_auto_tool_choice and not args.tool_call_parser:
         raise TypeError("Error: --enable-auto-tool-choice requires "
                         "--tool-call-parser")
+
+    ############
+    # Hopsworks: validations
+    ############
+    hopsworks_utils.utils.validate_parsed_serve_args(args)
 
 
 def create_parser_for_docs() -> FlexibleArgumentParser:

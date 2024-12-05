@@ -165,6 +165,7 @@ class OpenAIServingChat(OpenAIServing):
                 tool_parser=tool_parser,
                 truncate_prompt_tokens=request.truncate_prompt_tokens,
                 add_special_tokens=request.add_special_tokens,
+                raw_request=raw_request
             )
         except ValueError as e:
             logger.exception("Error in preprocessing prompt inputs")

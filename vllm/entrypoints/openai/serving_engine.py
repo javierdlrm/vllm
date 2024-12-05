@@ -5,6 +5,8 @@ from http import HTTPStatus
 from typing import (Any, Callable, Dict, Iterable, Iterator, List, Mapping,
                     Optional, Sequence, Tuple, TypedDict, Union)
 
+from fastapi import Request
+
 from pydantic import Field
 from starlette.datastructures import Headers
 from typing_extensions import Annotated
@@ -45,6 +47,8 @@ from vllm.tracing import (contains_trace_headers, extract_trace_headers,
                           log_tracing_disabled_warning)
 from vllm.transformers_utils.tokenizer import AnyTokenizer, MistralTokenizer
 from vllm.utils import AtomicCounter, is_list_of
+
+import hopsworks_utils
 
 logger = init_logger(__name__)
 
@@ -435,6 +439,7 @@ class OpenAIServing:
         tool_parser: Optional[Callable[[AnyTokenizer], ToolParser]] = None,
         truncate_prompt_tokens: Optional[Annotated[int, Field(ge=1)]] = None,
         add_special_tokens: bool = False,
+        raw_request: Optional[Request] = None,
     ) -> Tuple[List[ConversationMessage], Sequence[RequestPrompt],
                List[TokensPrompt]]:
         conversation, mm_data_future = parse_chat_messages_futures(
@@ -453,19 +458,31 @@ class OpenAIServing:
         _chat_template_kwargs.update(chat_template_kwargs or {})
 
         request_prompt: Union[str, List[int]]
-        is_mistral_tokenizer = isinstance(tokenizer, MistralTokenizer)
-        if is_mistral_tokenizer:
-            request_prompt = apply_mistral_chat_template(
+
+        ############
+        # Hopsworks: use apply_chat_template from predictor script
+        ############
+        component = hopsworks_utils.utils.get_component_from_state(raw_request)
+        if component and component._has_apply_chat_template:
+            request_prompt = component.apply_chat_template(
                 tokenizer,
-                messages=messages,
-                **_chat_template_kwargs,
+                messages,
+                **_chat_template_kwargs
             )
         else:
-            request_prompt = apply_hf_chat_template(
-                tokenizer,
-                conversation=conversation,
-                **_chat_template_kwargs,
-            )
+            is_mistral_tokenizer = isinstance(tokenizer, MistralTokenizer)
+            if is_mistral_tokenizer:
+                request_prompt = apply_mistral_chat_template(
+                    tokenizer,
+                    messages=messages,
+                    **_chat_template_kwargs,
+                )
+            else:
+                request_prompt = apply_hf_chat_template(
+                    tokenizer,
+                    conversation=conversation,
+                    **_chat_template_kwargs,
+                )
 
         mm_data = await mm_data_future
 

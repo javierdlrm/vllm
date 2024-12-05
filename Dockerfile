@@ -220,3 +220,8 @@ ENV VLLM_USAGE_SOURCE production-docker-image
 
 ENTRYPOINT ["python3", "-m", "vllm.entrypoints.openai.api_server"]
 #################### OPENAI API SERVER ####################
+
+#################### HOPSWORKS ####################
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install 'hopsworks[python]==4.1.0rc0'
+#################### HOPSWORKS ####################

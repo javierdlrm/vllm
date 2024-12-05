@@ -1,0 +1,7 @@
+[
+    {
+      "name": "hopsworks/vllm-openai",
+      "version": "env:VERSION",
+      "dockerFile": ""
+    }
+  ]
